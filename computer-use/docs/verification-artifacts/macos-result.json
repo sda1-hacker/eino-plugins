@@ -1,16 +1,23 @@
 {
-  "startedAt": "2026-10-30T10:06:49.4952+08:00",
+  "startedAt": "2026-10-30T13:35:41.515524+08:00",
   "passed": true,
   "blocked": false,
-  "helper": "/Users/sda1_hacker/Desktop/humbert/eino-computer-use/dist-computer-use/mac-arm64/hana-computer-use-helper",
+  "helper": "/Users/sda1_hacker/Desktop/humbert/eino-plugins/computer-use/dist-computer-use/mac-arm64/hana-computer-use-helper",
   "steps": [
     {
+      "name": "status",
+      "passed": true,
+      "output": "Computer Use 状态已加载"
+    },
+    {
       "name": "list_apps",
-      "passed": true
+      "passed": true,
+      "output": "应用列表已加载"
     },
     {
       "name": "start_fixture",
-      "passed": true
+      "passed": true,
+      "output": "控制租约已建立"
     },
     {
       "name": "observe_fixture",
@@ -21,8 +28,18 @@
       "passed": true
     },
     {
-      "name": "type_chinese",
+      "name": "click_input_to_focus",
+      "passed": true,
+      "output": "✅ Performed AXFocused on [1] AXTextField \"\"."
+    },
+    {
+      "name": "observe_focused_input",
       "passed": true
+    },
+    {
+      "name": "type_chinese",
+      "passed": true,
+      "output": "✅ Inserted 18 char(s) into [1] AXTextField \"\" on pid 47191 via AX."
     },
     {
       "name": "observe_typed_text",
@@ -33,8 +50,52 @@
       "passed": true
     },
     {
-      "name": "click_button",
+      "name": "press_return",
+      "passed": true,
+      "output": "✅ Pressed return on pid 47191."
+    },
+    {
+      "name": "return_effect_1",
       "passed": true
+    },
+    {
+      "name": "verify_return_effect",
+      "passed": true
+    },
+    {
+      "name": "type_chinese_keyboard_fallback",
+      "passed": true,
+      "output": "✅ Typed 13 char(s) on pid 47191 via CGEvent (AX fallback, 30ms delay)."
+    },
+    {
+      "name": "verify_keyboard_fallback_path",
+      "passed": true
+    },
+    {
+      "name": "keyboard_fallback_value_1",
+      "passed": true
+    },
+    {
+      "name": "verify_keyboard_fallback_value",
+      "passed": true
+    },
+    {
+      "name": "press_delete",
+      "passed": true,
+      "output": "✅ Pressed delete on pid 47191."
+    },
+    {
+      "name": "delete_effect_1",
+      "passed": true
+    },
+    {
+      "name": "verify_delete_effect",
+      "passed": true
+    },
+    {
+      "name": "click_button",
+      "passed": true,
+      "output": "✅ Performed AXPress on [3] AXButton \"Eino 验证按钮，已点击 1 次\"."
     },
     {
       "name": "observe_clicked_button",
@@ -45,11 +106,73 @@
       "passed": true
     },
     {
-      "name": "stop",
+      "name": "scroll_down",
+      "passed": true,
+      "output": "✅ Scrolled pid 47191 down via 20× down keystroke(s) (target [6] AXTextArea)."
+    },
+    {
+      "name": "scroll_down_effect_1",
       "passed": true
+    },
+    {
+      "name": "verify_scroll_down_effect",
+      "passed": true
+    },
+    {
+      "name": "scroll_up",
+      "passed": true,
+      "output": "✅ Scrolled pid 47191 up via 20× up keystroke(s) (target [6] AXTextArea)."
+    },
+    {
+      "name": "scroll_up_effect_1",
+      "passed": true
+    },
+    {
+      "name": "scroll_up_effect_2",
+      "passed": true
+    },
+    {
+      "name": "verify_scroll_up_effect",
+      "passed": true
+    },
+    {
+      "name": "perform_secondary_action",
+      "passed": true,
+      "output": "✅ Shown menu for [4] AXButton \"Eino 次级动作按钮\"."
+    },
+    {
+      "name": "secondary_menu_open_1",
+      "passed": true
+    },
+    {
+      "name": "verify_secondary_menu_open",
+      "passed": true
+    },
+    {
+      "name": "press_escape",
+      "passed": true,
+      "output": "✅ Pressed escape on pid 47191."
+    },
+    {
+      "name": "secondary_menu_closed_1",
+      "passed": true
+    },
+    {
+      "name": "secondary_menu_closed_2",
+      "passed": true
+    },
+    {
+      "name": "verify_escape_closes_menu",
+      "passed": true
+    },
+    {
+      "name": "stop",
+      "passed": true,
+      "output": "Computer Use 已停止"
     }
   ],
   "cleanup": {
-    "remaining_validation_processes": []
+    "fixtureExited": true,
+    "daemonStopped": true
   }
 }

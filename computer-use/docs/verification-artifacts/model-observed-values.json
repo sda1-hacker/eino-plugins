@@ -1,0 +1,29 @@
+{
+  "elements": [
+    {
+      "role": "AXTextField",
+      "label": "Eino 验证输入框",
+      "value": "模型验收：291463"
+    },
+    {
+      "role": "AXTextField",
+      "label": "Eino 键盘回退输入框",
+      "value": null
+    },
+    {
+      "role": "AXButton",
+      "label": "Eino 验证按钮，已点击 1 次",
+      "value": null
+    }
+  ],
+  "checks": {
+    "all_tool_calls_succeeded": false,
+    "button_effect_read_back": true,
+    "model_stopped_session": true,
+    "real_model_called": true,
+    "screenshots_returned": true,
+    "visual_code_absent_from_ax": true,
+    "visual_code_entered_and_read_back": true
+  },
+  "finalAXTree": "- AXApplication \"EinoComputerUseFixture\"\n  - [0] AXWindow \"Eino Computer Use 临时验证窗口\" actions=[AXRaise]\n    - AXStaticText = \"此窗口仅用于自动化验证，关闭后不保存任何内容。\"\n    - [1] AXTextField = \"模型验收：291463\" (Eino 验证输入框) id=eino-validation-input actions=[AXShowMenu, AXConfirm]\n    - AXStaticText = \"Eino 按键确认：0 次\"\n    - [2] AXTextField (Eino 键盘回退输入框)\n    - AXStaticText = \"Eino 回退按键确认：0 次\"\n    - [3] AXButton \"Eino 验证按钮，已点击 1 次\" id=eino-validation-button\n    - [4] AXButton \"Eino 次级动作按钮\" actions=[AXShowMenu]\n    - AXStaticText = \"Eino 次级动作：0 次，菜单已关闭\"\n    - [5] AXScrollArea actions=[AXScrollLeftByPage, AXScrollRightByPage, AXScrollUpByPage, AXScrollDownByPage]\n      - [6] AXTextArea (Eino 验证滚动内容) actions=[AXShowMenu]\n      - AXScrollBar\n        - AXValueIndicator\n        - [7] AXButton\n        - [8] AXButton\n        - [9] AXButton\n        - [10] AXButton\n    - AXStaticText = \"Eino 滚动偏移：0\"\n    - [11] AXButton\n    - [12] AXButton DISABLED actions=[AXShowMenu]\n      - AXGroup\n        - AXGroup\n    - [13] AXButton DISABLED\n    - AXStaticText = \"Eino Computer Use 临时验证窗口\"\n  - [14] AXMenuBar actions=[AXCancel]\n    - [15] AXMenuBarItem \"Apple\" actions=[AXCancel, AXPick]\n      - [16] AXMenu actions=[AXCancel]\n    - [17] AXMenuBarItem \"EinoComputerUseFixture\" actions=[AXCancel, AXPick]\n      - [18] AXMenu actions=[AXCancel]\n"
+}

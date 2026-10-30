@@ -642,6 +642,7 @@ func parseTree(markdown string) []Element {
 func normalizeCuaSnapshot(r cuaResult, l Lease) (Snapshot, error) {
 	m := object(r.structured)
 	snapshot := Snapshot{AppID: l.AppID, WindowID: l.WindowID, FocusedElementID: str(m["focusedElementId"])}
+	snapshot.AccessibilityTree = firstString(m["tree_markdown"], m["treeMarkdown"])
 	for _, v := range r.content {
 		b := object(v)
 		if str(b["type"]) == "image" {
@@ -685,7 +686,7 @@ func normalizeCuaSnapshot(r cuaResult, l Lease) (Snapshot, error) {
 			})
 		}
 	} else {
-		snapshot.Elements = parseTree(firstString(m["tree_markdown"], m["treeMarkdown"], r.text()))
+		snapshot.Elements = parseTree(firstString(snapshot.AccessibilityTree, r.text()))
 	}
 	return snapshot, nil
 }
@@ -748,6 +749,8 @@ func (p *MacOSProvider) PerformAction(ctx context.Context, l Lease, a ResolvedAc
 		name = "click"
 		if a.Type == ActionSecondary {
 			name = "right_click"
+		} else if (a.SnapshotElement.Role == "AXTextField" || a.SnapshotElement.Role == "AXTextArea") && !contains(a.SnapshotElement.Actions, "AXPress") {
+			payload["action"] = "focus"
 		} else if actions := a.SnapshotElement.Actions; len(actions) > 0 && !contains(actions, "AXPress") {
 			if contains(actions, "AXShowDefaultUI") {
 				payload["action"] = "show_default_ui"

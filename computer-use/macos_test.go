@@ -113,6 +113,12 @@ func TestMacOSDaemonAndElementProtocol(t *testing.T) {
 	if len(actions) != 1 || actions[0]["action"] != "show_default_ui" || actions[0]["element_index"] != float64(0) {
 		t.Fatalf("semantic mapping: %+v", actions)
 	}
+	if _, err = p.PerformAction(ctx, l, ResolvedAction{Type: ActionClickElement, ElementID: "1", SnapshotElement: &Element{Role: "AXTextField", Actions: []string{"AXShowMenu", "AXConfirm"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if actions[1]["action"] != "focus" || actions[1]["element_index"] != float64(1) {
+		t.Fatalf("输入框点击应聚焦，不能提交表单：%+v", actions[1])
+	}
 	if _, err = p.PerformAction(ctx, l, ResolvedAction{Type: ActionClickPoint}); !ErrorHasCode(err, ErrCapabilityUnsupported) {
 		t.Fatal(err)
 	}
@@ -121,6 +127,21 @@ func TestMacOSDaemonAndElementProtocol(t *testing.T) {
 	}
 	if starts != 1 || stops != 1 {
 		t.Fatalf("daemon lifecycle: %d/%d", starts, stops)
+	}
+}
+
+// 静态标签不带 element index，但其文本仍应交给模型和宿主作动作效果验证。
+func TestMacOSPreservesPassiveAccessibilityText(t *testing.T) {
+	tree := "- [0] AXButton \"提交\" actions=[AXPress]\n- AXStaticText = \"提交已完成\""
+	snapshot, err := normalizeCuaSnapshot(cuaResult{
+		structured: map[string]any{"tree_markdown": tree},
+		content:    []any{map[string]any{"type": "image", "mimeType": "image/png", "data": NewMockProvider().image}},
+	}, Lease{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(snapshot.AccessibilityTree, "提交已完成") || len(snapshot.Elements) != 1 || snapshot.Elements[0].ElementID != "0" {
+		t.Fatalf("静态文本丢失或产生了虚假的可操作编号：%+v", snapshot)
 	}
 }
 func TestMacOSDoesNotStopExternalDaemon(t *testing.T) {

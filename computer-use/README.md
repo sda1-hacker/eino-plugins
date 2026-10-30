@@ -118,13 +118,14 @@ node, err := compose.NewToolNode(ctx, &compose.ToolsNodeConfig{
 })
 ```
 
-调用 `get_app_state` 时，返回一个文本 part 和一个图片 part，图片使用 `schema.ToolOutputImage.Base64Data` 与 `MIMEType`，没有把 Base64 当普通文字交给模型。元素摘要、leaseId、snapshotId 和平台能力保留在文本 JSON 里。
+调用 `get_app_state` 时，返回一个文本 part 和一个图片 part，图片使用 `schema.ToolOutputImage.Base64Data` 与 `MIMEType`，没有把 Base64 当普通文字交给模型。元素摘要、leaseId、snapshotId 和平台能力保留在文本 JSON 里；`details.accessibilityTree` 保留 macOS 普通状态标签等没有操作编号的 AX 文本。
 
 已有支持工具调用与图片输入的 ChatModel 时，可以使用 `examples/agent.New` 创建 ReAct Agent，或直接配置：
 
 ```go
 agent, err := react.NewAgent(ctx, &react.AgentConfig{
     ToolCallingModel: chatModel,
+    MessageModifier: computeruse.ToolImagesAsUserMessages,
     ToolsConfig: compose.ToolsNodeConfig{
         Tools: []tool.BaseTool{desktop},
         ExecuteSequentially: true,
@@ -133,7 +134,7 @@ agent, err := react.NewAgent(ctx, &react.AgentConfig{
 })
 ```
 
-`examples/agent` 接受应用已有的 ChatModel，不绑定模型厂商或额外引入某家服务的 API Key。调用结束后，使用独立清理上下文释放会话，或者在整个工具生命周期结束时调用 `Cleanup()`。
+`examples/agent` 接受应用已有的 ChatModel，不绑定模型厂商或额外引入某家服务的 API Key。它已配置 `ToolImagesAsUserMessages`：对只允许 tool 消息包含文本的聊天接口，把截图放入同批工具回复之后的 user 图片消息，保留工具调用 ID，避免把图片变成普通 Base64 文本。支持原生 tool 图片的接口也可以直接使用工具的多模态返回。调用结束后，使用独立清理上下文释放会话，或者在整个工具生命周期结束时调用 `Cleanup()`。
 
 如果现有项目必须使用 browseruse 的字符串接口：
 
@@ -234,7 +235,9 @@ GOOS=linux GOARCH=amd64 go build ./...
 
 本机系统自带 Swift 5.9。本次验证从 Swift 官方下载并验证签名，在临时目录使用 Swift 6.2.4，已成功编译原生 helper，没有替换系统工具链。macOS 14.2 SDK 所需的并发标注兼容补丁也已纳入构建脚本；构建强制使用 `Package.resolved`，不会自动升级锁定依赖。
 
-授权后，真实 Eino → Go Provider → 原生 helper → AppKit 窗口的核心调用链已通过：11 个步骤 / 断言全部成功，包括实际截图解码、中文输入回读、按钮点击回读和停止；确认没有残留测试窗口或 helper 进程。实测还修复了 Cua Markdown 中括号标签和文本值的解析。完整结果及截图见 [验证记录](docs/verification.md)。Windows 真实 GUI、真实模型服务推理以及未列入该场景的其他原生动作尚未实测。
+本机 macOS 14.1 arm64 的真实 Eino → Go Provider → 原生 helper → AppKit 窗口回归已通过：本轮 38 个步骤 / 断言覆盖全部 10 个工具动作，包括截图、输入框聚焦、AX 中文输入、中文键盘回退、回车 / 删除 / Escape、上下滚动、次级菜单与停止清理。已修复旧 macOS 的 SkyLight 按键崩溃、AX 文本不可写却返回成功、输入框不支持 AXPress，以及普通 AX 状态标签丢失的问题。
+
+真实 `mimo-v2.6-flash` + Eino ReAct 验收也已通过：从截图读取不在 AX 树中的随机视觉码，输入中文、点击按钮，再独立读回确认。过程中一次旧快照请求被正确拒绝，模型重新观察后恢复；完整报告保留该重试，不声称每个工具调用都成功。Windows 真实 GUI 和其他应用兼容性仍未实测。结果及截图见 [验证记录](docs/verification.md)。
 
 授权后可重复执行：
 
@@ -242,7 +245,15 @@ GOOS=linux GOARCH=amd64 go build ./...
 node scripts/verify-native.mjs "$PWD/dist-computer-use/mac-arm64/hana-computer-use-helper" --request-permissions
 ```
 
-程序会创建独立 AppKit 测试窗口，经真实 Eino `ToolsNode` 执行截图解码、中文输入与回读、按钮点击与回读，最后清理测试窗口和自有 daemon。报告保存在 `.cache/validation/native-verification.json`，只有全部断言通过才标记 `passed: true`。它不调用模型服务，也不修改用户现有文档。
+程序会创建独立 AppKit 测试窗口，经真实 Eino `ToolsNode` 验证动作及其实际界面变化，最后确认测试窗口和自有 daemon 均已退出。报告保存在 `.cache/validation/native-verification.json`，只有全部断言与清理通过才标记 `passed: true`。默认模式不调用模型服务。
+
+需要真实模型验收时，先在环境中配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL_NAME`，然后执行：
+
+```sh
+node scripts/verify-native.mjs --model
+```
+
+该模式会调用配置的模型服务，只向模型发送独立验证窗口的观察内容。随机视觉码不会放入提示词或 AX 文本；通过标准是模型读图后实际输入正确内容、点击一次、重新观察并停止。适配器在 `.cache/validation/model-runner` 的独立 Go module 中运行，不增加组件的模型厂商依赖。报告为 `.cache/validation/model-verification.json`，不会记录 API Key。
 
 ## 目录和来源
 
@@ -259,7 +270,8 @@ examples/agent/     注入已有 ChatModel 的 ReAct 接入函数
 examples/desktop/   指定真实应用的状态读取示例
 examples/verify/    真实 Eino + 原生 helper 的验证程序
 testdata/macos-fixture/   独立 AppKit 测试窗口
+testdata/model-runner/    可选的真实模型验收程序模板
 docs/               上游代码分析
 ```
 
-遵循 Apache-2.0，原始作者与修改说明见 [NOTICE](NOTICE) 和 [LICENSE](LICENSE)。
+遵循仓库的 [Apache-2.0 许可证](../LICENSE)。桌面控制代码移植自 OpenHanako（Copyright 2025 liliMozi），基线为 `9a6cabf8c513db5edc6cf8179a538c9075885c6e`；Config / Param / Execute / Cleanup 接口参考 CloudWeGo Eino-ext。Go 控制层、Eino 多模态适配及本机兼容修复由本组件实现；SwiftPM 依赖继续适用各自的许可证。

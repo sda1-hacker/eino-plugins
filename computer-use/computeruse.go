@@ -193,6 +193,7 @@ func (t *Tool) execute(ctx context.Context, p Param) (*ToolResult, error) {
 				"allowedActions":     s.AllowedActions,
 				"actionCapabilities": s.ActionCapabilities,
 				"elements":           s.Elements,
+				"accessibilityTree":  s.AccessibilityTree,
 				"display":            s.Display,
 			},
 		}, nil

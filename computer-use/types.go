@@ -158,17 +158,19 @@ type Lease struct {
 	LastSnapshotID string     `json:"lastSnapshotId,omitempty"`
 }
 type Snapshot struct {
-	SnapshotID         string       `json:"snapshotId"`
-	LeaseID            string       `json:"leaseId"`
-	ProviderID         string       `json:"providerId"`
-	AppID              string       `json:"appId"`
-	WindowID           string       `json:"windowId"`
-	Mode               string       `json:"mode"`
-	CapturedAt         time.Time    `json:"capturedAt"`
-	Screenshot         Image        `json:"screenshot"`
-	Display            Display      `json:"display"`
-	FocusedElementID   string       `json:"focusedElementId,omitempty"`
-	Elements           []Element    `json:"elements"`
+	SnapshotID       string    `json:"snapshotId"`
+	LeaseID          string    `json:"leaseId"`
+	ProviderID       string    `json:"providerId"`
+	AppID            string    `json:"appId"`
+	WindowID         string    `json:"windowId"`
+	Mode             string    `json:"mode"`
+	CapturedAt       time.Time `json:"capturedAt"`
+	Screenshot       Image     `json:"screenshot"`
+	Display          Display   `json:"display"`
+	FocusedElementID string    `json:"focusedElementId,omitempty"`
+	Elements         []Element `json:"elements"`
+	// AccessibilityTree 保留只读标签等非操作元素；这些节点没有可用于点击的编号。
+	AccessibilityTree  string       `json:"accessibilityTree,omitempty"`
 	AllowedActions     []Action     `json:"allowedActions"`
 	ActionCapabilities Capabilities `json:"actionCapabilities"`
 }

@@ -30,6 +30,9 @@ func (m *scriptedModel) Generate(ctx context.Context, messages []*schema.Message
 		return nil, err
 	}
 	for _, msg := range messages {
+		if strings.Contains(msg.Content, "ReAct 中文验证") {
+			m.sawText = true
+		}
 		for _, part := range msg.UserInputMultiContent {
 			if part.Image != nil && part.Image.Base64Data != nil {
 				m.sawImage = true

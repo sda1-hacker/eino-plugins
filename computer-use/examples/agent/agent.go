@@ -19,6 +19,7 @@ func New(ctx context.Context, chatModel model.ToolCallingChatModel, config *comp
 	}
 	agent, err := react.NewAgent(ctx, &react.AgentConfig{
 		ToolCallingModel: chatModel,
+		MessageModifier:  computeruse.ToolImagesAsUserMessages,
 		ToolsConfig:      compose.ToolsNodeConfig{Tools: []tool.BaseTool{desktop}, ExecuteSequentially: true},
 		MaxStep:          40,
 	})

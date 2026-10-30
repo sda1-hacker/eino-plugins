@@ -3,13 +3,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { randomInt } from "node:crypto";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const positional = process.argv.slice(2).find(argument => !argument.startsWith("--"));
 const helper = path.resolve(positional || path.join(root, "dist-computer-use", `mac-${process.arch}`, "hana-computer-use-helper"));
+const modelMode = process.argv.includes("--model");
+if (modelMode) {
+  for (const name of ["OPENAI_API_KEY", "OPENAI_MODEL_NAME", "OPENAI_BASE_URL"]) {
+    if (!process.env[name]) throw new Error(`环境变量 ${name} 未配置`);
+  }
+}
+// 验证码只传给测试进程和独立断言器，不放进模型提示词或工具文本。
+const environment = { ...process.env, EINO_VALIDATION_VISUAL_CODE: String(randomInt(100000, 1000000)) };
 if (process.platform !== "darwin") throw new Error("真实原生验证需要 macOS");
 if (!fs.existsSync(helper)) throw new Error(`没有找到 helper：${helper}，请先构建`);
 const validation = path.join(root, ".cache", "validation");
+const reportPath = path.join(validation, modelMode ? "model-verification.json" : "native-verification.json");
+const socketPath = path.join(validation, modelMode ? "model-helper.sock" : "native-helper.sock");
+fs.mkdirSync(validation, { recursive: true });
+// 构建或调用失败时不能把上一次 passed=true 的报告当成本次结果。
+fs.rmSync(reportPath, { force: true });
 const app = path.join(validation, "EinoComputerUseFixture.app");
 const contents = path.join(app, "Contents");
 const executable = path.join(contents, "MacOS", "EinoComputerUseFixture");
@@ -27,7 +41,7 @@ fs.writeFileSync(path.join(contents, "Info.plist"), `<?xml version="1.0" encodin
 const compiler = process.env.HANA_COMPUTER_USE_SWIFTC_PATH || (process.env.HANA_COMPUTER_USE_SWIFT_PATH
   ? path.join(path.dirname(process.env.HANA_COMPUTER_USE_SWIFT_PATH), "swiftc") : "swiftc");
 execFileSync(compiler, ["-module-cache-path", path.join(validation, "fixture-module-cache"), path.join(root, "testdata", "macos-fixture", "main.swift"), "-o", executable], { cwd: root, stdio: "inherit" });
-const fixture = spawn(executable, [], { cwd: root, stdio: "ignore" });
+const fixture = spawn(executable, [], { cwd: root, stdio: "ignore", env: environment });
 let exitCode = 1;
 try {
   await new Promise((resolve, reject) => {
@@ -35,12 +49,53 @@ try {
     fixture.once("error", error => { clearTimeout(timer); reject(error); });
     fixture.once("exit", code => { clearTimeout(timer); reject(new Error(`测试窗口启动失败：${code}`)); });
   });
-  const args = ["run", "./examples/verify", "-helper", helper, "-report", path.join(validation, "native-verification.json")];
+  let workdir = root;
+  let args = ["run", "./examples/verify", "-helper", helper, "-report", reportPath];
+  if (modelMode) {
+    // 模型厂商适配器放在临时独立模块，组件本身不增加模型服务依赖。
+    workdir = path.join(validation, "model-runner");
+    fs.mkdirSync(workdir, { recursive: true });
+    fs.copyFileSync(path.join(root, "testdata", "model-runner", "main.go"), path.join(workdir, "main.go"));
+    fs.copyFileSync(path.join(root, "testdata", "model-runner", "main_test.go"), path.join(workdir, "main_test.go"));
+    fs.writeFileSync(path.join(workdir, "go.mod"), `module example.com/eino-computer-use-model-verification
+
+go 1.23.0
+
+require (
+    github.com/sda1-hacker/eino-plugins/computer-use v0.0.0
+    github.com/cloudwego/eino-ext/components/model/openai v0.1.13
+)
+
+replace github.com/sda1-hacker/eino-plugins/computer-use => ${JSON.stringify(root)}
+`);
+    const selfCheck = spawnSync("go", ["test", "-mod=mod", "."], { cwd: workdir, stdio: "inherit", env: environment });
+    if (selfCheck.error || selfCheck.status !== 0) throw new Error("模型验收器自检失败");
+    args = ["run", "-mod=mod", ".", "-helper", helper, "-report", reportPath];
+  }
   if (process.argv.includes("--request-permissions")) args.push("-request-permissions");
-  const result = spawnSync("go", args, { cwd: root, stdio: "inherit", env: process.env });
+  const result = spawnSync("go", args, { cwd: workdir, stdio: "inherit", env: environment });
   if (result.error) throw result.error;
   exitCode = result.status ?? 1;
 } finally {
-  fixture.kill("SIGTERM");
+  if (fixture.exitCode === null && fixture.signalCode === null) {
+    await new Promise(resolve => {
+      const timer = setTimeout(() => fixture.kill("SIGKILL"), 2000);
+      fixture.once("exit", () => { clearTimeout(timer); resolve(); });
+      fixture.kill("SIGTERM");
+    });
+  }
+  const status = spawnSync(helper, ["status", "--socket", socketPath], { cwd: root, env: environment, encoding: "utf8" });
+  const cleanup = { fixtureExited: fixture.exitCode !== null || fixture.signalCode !== null, daemonStopped: status.status === 1 };
+  if (fs.existsSync(reportPath)) {
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    report.cleanup = cleanup;
+    report.passed = Boolean(report.passed && cleanup.fixtureExited && cleanup.daemonStopped);
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + "\n", { mode: 0o600 });
+    if (!report.passed) exitCode = 1;
+  } else {
+    fs.writeFileSync(reportPath, JSON.stringify({ passed: false, reason: "验证程序未生成本轮报告", cleanup }, null, 2) + "\n", { mode: 0o600 });
+    exitCode = 1;
+  }
+  console.log("验证资源清理：" + JSON.stringify(cleanup));
 }
 process.exitCode = exitCode;

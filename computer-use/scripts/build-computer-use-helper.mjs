@@ -61,6 +61,10 @@ const CUA_CLICK_TOOL_RELATIVE_PATH = path.join(
   "Tools",
   "ClickTool.swift",
 );
+const CUA_EVENT_POST_RELATIVE_PATH = path.join(
+  "checkouts", "cua", "libs", "cua-driver", "Sources",
+  "CuaDriverCore", "Input", "SkyLightEventPost.swift",
+);
 
 const CUA_AX_PATCH_SENTINEL = "cuaDriverAXMessagingTimeoutSeconds";
 const CUA_CLICK_PATCH_SENTINEL = '"show_default_ui": "AXShowDefaultUI"';
@@ -421,6 +425,57 @@ ${anchor}`, "pid-scoped suppression overload");
   return source;
 }
 
+// 私有类存在不代表其工厂方法可用。macOS 14.1 缺少该 selector，直接
+// objc_msgSend 会抛出无法由 Swift catch 捕获的异常，导致整个 daemon 退出。
+// 方法不可用时让上游返回 false，沿用 KeyboardInput 的公开按键投递回退。
+export function patchCuaDriverEventCompatibilitySource(source) {
+  const sentinel = "class_getClassMethod(messageClass, factorySelector)";
+  if (source.includes(sentinel)) return source;
+  let patched = replaceRequired(source, "        return Resolved(\n            postToPid: postToPid,", `        // 中文兼容补丁：先验证类方法，避免旧 macOS 的 unrecognized selector 崩溃。
+        let factorySelector = NSSelectorFromString("messageWithEventRecord:pid:version:")
+        guard class_getClassMethod(messageClass, factorySelector) != nil else { return nil }
+
+        return Resolved(
+            postToPid: postToPid,`, "SkyLight authentication method availability");
+  return replaceRequired(patched, `            factorySelector: NSSelectorFromString(
+                "messageWithEventRecord:pid:version:")`, "            factorySelector: factorySelector", "checked SkyLight factory selector");
+}
+
+// 某些自绘控件会对不支持的 AXSelectedText 写入返回 success，却没有输入文字。
+// 先检查可写性，明确拒绝时抛回上游的 AXInputError，启用既有键盘输入回退。
+export function patchCuaDriverTextInputSource(source) {
+  if (source.includes("AXUIElementIsAttributeSettable(element, attribute as CFString")) return source;
+  return replaceRequired(source,
+    "        let result = AXUIElementSetAttributeValue(element, attribute as CFString, value)",
+    `        if attribute == "AXSelectedText" {
+            var settable = DarwinBoolean(false)
+            let availability = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+            guard availability == .success, settable.boolValue else {
+                let code = availability == .success ? AXError.attributeUnsupported.rawValue : availability.rawValue
+                throw AXInputError.setAttributeFailed(attribute: attribute, code: code)
+            }
+        }
+        let result = AXUIElementSetAttributeValue(element, attribute as CFString, value)`,
+    "AX selected text write capability");
+}
+
+// 文本输入控件通常不支持 AXPress；点击输入框时使用明确的 AXFocused 属性，
+// 避免调用 AXConfirm 意外提交表单，也不退化成前台坐标点击。
+export function patchCuaDriverTextFocusSource(source) {
+  if (source.includes('"focus": "AXFocused"')) return source;
+  let patched = replaceRequired(source, '"enum": ["press", "show_menu",', '"enum": ["press", "focus", "show_menu",', "text input focus action schema");
+  patched = replaceRequired(patched, '"press": "AXPress",', '"press": "AXPress",\n        "focus": "AXFocused",', "text input focus action mapping");
+  patched = replaceRequired(patched, "                try AXInput.performAction(axAction, on: element)", `                if axAction == "AXFocused" {
+                    try AXInput.setAttribute("AXFocused", on: element, value: kCFBooleanTrue as CFTypeRef)
+                    guard AXInput.boolAttribute("AXFocused", of: element) == true else {
+                        throw AXInputError.setAttributeFailed(attribute: "AXFocused", code: AXError.cannotComplete.rawValue)
+                    }
+                } else {
+                    try AXInput.performAction(axAction, on: element)
+                }`, "semantic input focus without AXPress");
+  return replaceRequired(patched, "if !advertisedActions.contains(axAction) {", 'if axAction != "AXFocused" && !advertisedActions.contains(axAction) {', "focus property is not an advertised action");
+}
+
 export function applyCuaDriverSourcePatches({ scratchPath, sdkVersion } = {}) {
   const appStatePath = path.join(scratchPath, CUA_APP_STATE_RELATIVE_PATH);
   if (!fs.existsSync(appStatePath)) {
@@ -442,11 +497,31 @@ export function applyCuaDriverSourcePatches({ scratchPath, sdkVersion } = {}) {
   }
 
   const clickToolSource = fs.readFileSync(clickToolPath, "utf8");
-  const patchedClickTool = patchCuaDriverClickToolSource(clickToolSource);
+  const patchedClickTool = patchCuaDriverTextFocusSource(patchCuaDriverClickToolSource(clickToolSource));
   if (patchedClickTool !== clickToolSource) {
     fs.chmodSync(clickToolPath, 0o644);
     fs.writeFileSync(clickToolPath, patchedClickTool);
     console.log("[computer-use-helper] patched Cua ClickTool for AXShowDefaultUI row actions");
+    patchedAny = true;
+  }
+
+  // 这是运行时系统兼容问题，与编译时 SDK 版本无关，所有构建均需应用。
+  const eventPostPath = path.join(scratchPath, CUA_EVENT_POST_RELATIVE_PATH);
+  const eventPostSource = fs.readFileSync(eventPostPath, "utf8");
+  const patchedEventPost = patchCuaDriverEventCompatibilitySource(eventPostSource);
+  if (patchedEventPost !== eventPostSource) {
+    fs.chmodSync(eventPostPath, 0o644);
+    fs.writeFileSync(eventPostPath, patchedEventPost);
+    console.log("[computer-use-helper] patched SkyLight runtime method availability");
+    patchedAny = true;
+  }
+  const inputPath = path.join(path.dirname(eventPostPath), "AXInput.swift");
+  const inputSource = fs.readFileSync(inputPath, "utf8");
+  const patchedInput = patchCuaDriverTextInputSource(inputSource);
+  if (patchedInput !== inputSource) {
+    fs.chmodSync(inputPath, 0o644);
+    fs.writeFileSync(inputPath, patchedInput);
+    console.log("[computer-use-helper] patched AX text input capability check");
     patchedAny = true;
   }
 
