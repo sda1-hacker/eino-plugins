@@ -1,3 +1,14 @@
+// Package computeruse 为 Eino 提供桌面窗口观察与语义操作工具。
+//
+// 工具支持应用枚举、控制租约、截图与无障碍元素观察，以及基于元素的语义操作。
+// NewComputerUseTool 返回实现 Eino EnhancedInvokableTool 的多模态工具；
+// 如需兼容字符串工具接口，可使用 Tool.AsTextTool。
+//
+// 模块导入路径为 github.com/sda1-hacker/eino-plugins/computer-use，
+// Go 包名为 computeruse。macOS 默认通过 purego 在本进程调用系统框架，
+// 支持 CGO_ENABLED=0，不需要外部 helper、Swift 或 Node.js；仍需 macOS 系统权限。
+// Windows 目前仍依赖内嵌的 PowerShell UI Automation 脚本；
+// NewMockProvider 可用于无需桌面的验证。
 package computeruse
 
 import (
@@ -255,12 +266,7 @@ func (t *Tool) emit(ctx context.Context, phase string, p Param, code ErrorCode) 
 		runtimeID = t.host.config.DefaultProviderID
 	}
 	if runtimeID == "" {
-		switch t.host.config.Platform {
-		case "darwin":
-			runtimeID = "macos:cua"
-		case "windows":
-			runtimeID = "windows:uia"
-		}
+		runtimeID = t.host.providerID("")
 	}
 	if runtimeID != "" {
 		if provider, e := t.host.providers.Require(runtimeID); e == nil && provider.Capabilities().NativeCursor {
@@ -359,4 +365,53 @@ func (t *Tool) Cleanup() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return t.host.Dispose(ctx)
+}
+
+// ToolImagesAsUserMessages 适配只允许 tool 消息携带文本的聊天接口。
+// 保留工具调用 ID 和文本结果，把截图放到同一批工具回复之后的 user 图片消息中。
+// 原始消息保持不变，工具自身仍使用 Eino 原生多模态返回接口。
+func ToolImagesAsUserMessages(_ context.Context, input []*schema.Message) []*schema.Message {
+	output := make([]*schema.Message, 0, len(input)+1)
+	var images []schema.MessageInputPart
+	flush := func() {
+		if len(images) == 0 {
+			return
+		}
+		parts := []schema.MessageInputPart{{Type: schema.ChatMessagePartTypeText, Text: "以下截图来自前面 computer 工具的观察结果，请结合对应 snapshotId 和元素编号判断。"}}
+		parts = append(parts, images...)
+		output = append(output, &schema.Message{Role: schema.User, UserInputMultiContent: parts})
+		images = nil
+	}
+	for _, message := range input {
+		if message.Role != schema.Tool {
+			flush()
+			output = append(output, message)
+			continue
+		}
+		if len(message.UserInputMultiContent) == 0 {
+			output = append(output, message)
+			continue
+		}
+		var texts []string
+		if message.Content != "" {
+			texts = append(texts, message.Content)
+		}
+		var remaining []schema.MessageInputPart
+		for _, part := range message.UserInputMultiContent {
+			switch {
+			case part.Image != nil:
+				images = append(images, part)
+			case part.Type == schema.ChatMessagePartTypeText:
+				texts = append(texts, part.Text)
+			default:
+				remaining = append(remaining, part)
+			}
+		}
+		copy := *message
+		copy.Content = strings.Join(texts, "\n")
+		copy.UserInputMultiContent = remaining
+		output = append(output, &copy)
+	}
+	flush()
+	return output
 }

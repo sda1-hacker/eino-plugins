@@ -1,4 +1,5 @@
-# 源自 OpenHanako windows-uia-script.ts（Apache-2.0）；Go 移植修改：滚动次数使用 amount。
+# Windows UI Automation 桥接脚本（Apache-2.0）；来源声明见 NOTICE。
+# 修改：滚动次数使用 amount，协议通过请求文件与结果文件交换数据。
 param(
   [string]$RequestPath = "",
   [string]$ResultPath = ""

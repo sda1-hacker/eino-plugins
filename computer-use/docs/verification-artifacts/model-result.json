@@ -1,9 +1,9 @@
 {
-  "startedAt": "2026-10-30T13:37:54.500897+08:00",
+  "startedAt": "2026-10-30T14:52:37.497719+08:00",
   "passed": true,
   "model": "mimo-v2.6-flash",
   "modelCalls": 11,
-  "totalTokens": 95264,
+  "totalTokens": 204622,
   "imageParts": 4,
   "actions": [
     {
@@ -14,48 +14,48 @@
     {
       "action": "get_app_state",
       "passed": true,
-      "arguments": "{\"action\": \"get_app_state\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"get_app_state\"}"
     },
     {
       "action": "click_element",
       "passed": true,
-      "arguments": "{\"action\": \"click_element\", \"elementId\": \"1\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"click_element\", \"elementId\": \"ax:1:1\", \"snapshotId\": \"4b307648786a6fb01dd92022b9b4ba80\"}"
     },
     {
       "action": "type_text",
       "passed": false,
       "error": "快照已失效，请重新 get_app_state",
-      "arguments": "{\"action\": \"type_text\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\", \"text\": \"模型验收：291463\"}"
+      "arguments": "{\"action\": \"type_text\", \"text\": \"模型验收：244311\"}"
     },
     {
       "action": "get_app_state",
       "passed": true,
-      "arguments": "{\"action\": \"get_app_state\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"get_app_state\"}"
     },
     {
       "action": "type_text",
       "passed": true,
-      "arguments": "{\"action\": \"type_text\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\", \"text\": \"模型验收：291463\"}"
+      "arguments": "{\"action\": \"type_text\", \"text\": \"模型验收：244311\"}"
     },
     {
       "action": "get_app_state",
       "passed": true,
-      "arguments": "{\"action\": \"get_app_state\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"get_app_state\"}"
     },
     {
       "action": "click_element",
       "passed": true,
-      "arguments": "{\"action\": \"click_element\", \"elementId\": \"3\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"click_element\", \"elementId\": \"ax:3:3\", \"snapshotId\": \"b1baea32d2b2ea41fc49c29af89b4347\"}"
     },
     {
       "action": "get_app_state",
       "passed": true,
-      "arguments": "{\"action\": \"get_app_state\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"get_app_state\"}"
     },
     {
       "action": "stop",
       "passed": true,
-      "arguments": "{\"action\": \"stop\", \"leaseId\": \"8f7dbff80789d3e8e1d20517d62491d2\"}"
+      "arguments": "{\"action\": \"stop\"}"
     }
   ],
   "checks": {
@@ -67,9 +67,12 @@
     "visual_code_absent_from_ax": true,
     "visual_code_entered_and_read_back": true
   },
-  "final": "任务已完成。执行结果如下：\n\n1. **读取验证码**：从截图黄色区域识别出六位视觉验证码为 `291463`（该内容不在无障碍文本中，通过截图视觉读取）。\n\n2. **输入内容**：点击“Eino 验证输入框”（元素 1）使其聚焦，输入 `模型验收：291463`。无障碍树确认该输入框 value 为「模型验收：291463」。\n\n3. **点击按钮**：点击普通的“Eino 验证按钮”（元素 3）恰好 1 次，未触碰键盘回退框、滚动区或次级动作按钮。\n\n4. **最终确认**：再次观察截图与无障碍树，均确认：\n   - 输入框内容：**模型验收：291463** ✅\n   - 按钮状态：**“Eino 验证按钮，已点击 1 次”** ✅\n\n5. **已停止控制**：Computer Use 会话已正常结束。",
+  "final": "**任务已完成。**\n\n执行过程与结果：\n\n1. **读取视觉验证码**：从截图黄色区域读取到六位验证码 **244311**（该内容未出现在无障碍文本中，仅能通过视觉识别）。\n2. **输入内容**：聚焦「Eino 验证输入框」并输入 `模型验收：244311`。\n3. **点击按钮**：对普通的「Eino 验证按钮」（automationId: eino-validation-button）执行了**一次** AXPress，未触碰次级动作按钮、键盘回退框或滚动区。\n4. **复核确认**（snapshotId `23cde73c29103f5cb325a20bbf9d28cb`）：\n   - 输入框 value = `模型验收：244311` ✅\n   - 按钮标签变为「Eino 验证按钮，**已点击 1 次**」✅\n5. **已停止控制**，租约释放。",
+  "backend": "macos:ax",
+  "cgoEnabled": false,
   "cleanup": {
     "fixtureExited": true,
-    "daemonStopped": true
+    "daemonStopped": true,
+    "externalHelperUsed": false
   }
 }

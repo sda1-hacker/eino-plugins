@@ -1,8 +1,8 @@
 {
-  "startedAt": "2026-10-30T13:35:41.515524+08:00",
+  "startedAt": "2026-10-30T15:57:34.757206+08:00",
   "passed": true,
   "blocked": false,
-  "helper": "/Users/sda1_hacker/Desktop/humbert/eino-plugins/computer-use/dist-computer-use/mac-arm64/hana-computer-use-helper",
+  "backend": "macos:ax",
   "steps": [
     {
       "name": "status",
@@ -30,7 +30,7 @@
     {
       "name": "click_input_to_focus",
       "passed": true,
-      "output": "✅ Performed AXFocused on [1] AXTextField \"\"."
+      "output": "已聚焦输入框"
     },
     {
       "name": "observe_focused_input",
@@ -39,7 +39,7 @@
     {
       "name": "type_chinese",
       "passed": true,
-      "output": "✅ Inserted 18 char(s) into [1] AXTextField \"\" on pid 47191 via AX."
+      "output": "已通过 AX 输入文字"
     },
     {
       "name": "observe_typed_text",
@@ -52,7 +52,7 @@
     {
       "name": "press_return",
       "passed": true,
-      "output": "✅ Pressed return on pid 47191."
+      "output": "已向目标应用发送按键 return"
     },
     {
       "name": "return_effect_1",
@@ -65,7 +65,7 @@
     {
       "name": "type_chinese_keyboard_fallback",
       "passed": true,
-      "output": "✅ Typed 13 char(s) on pid 47191 via CGEvent (AX fallback, 30ms delay)."
+      "output": "已通过 CGEvent 输入文字（AX fallback）"
     },
     {
       "name": "verify_keyboard_fallback_path",
@@ -82,7 +82,7 @@
     {
       "name": "press_delete",
       "passed": true,
-      "output": "✅ Pressed delete on pid 47191."
+      "output": "已向目标应用发送按键 delete"
     },
     {
       "name": "delete_effect_1",
@@ -95,7 +95,7 @@
     {
       "name": "click_button",
       "passed": true,
-      "output": "✅ Performed AXPress on [3] AXButton \"Eino 验证按钮，已点击 1 次\"."
+      "output": "已执行 AXPress"
     },
     {
       "name": "observe_clicked_button",
@@ -108,7 +108,7 @@
     {
       "name": "scroll_down",
       "passed": true,
-      "output": "✅ Scrolled pid 47191 down via 20× down keystroke(s) (target [6] AXTextArea)."
+      "output": "已向目标元素发送 20 次 down 滚动按键"
     },
     {
       "name": "scroll_down_effect_1",
@@ -121,14 +121,10 @@
     {
       "name": "scroll_up",
       "passed": true,
-      "output": "✅ Scrolled pid 47191 up via 20× up keystroke(s) (target [6] AXTextArea)."
+      "output": "已向目标元素发送 20 次 up 滚动按键"
     },
     {
       "name": "scroll_up_effect_1",
-      "passed": true
-    },
-    {
-      "name": "scroll_up_effect_2",
       "passed": true
     },
     {
@@ -138,7 +134,7 @@
     {
       "name": "perform_secondary_action",
       "passed": true,
-      "output": "✅ Shown menu for [4] AXButton \"Eino 次级动作按钮\"."
+      "output": "已请求目标元素显示菜单"
     },
     {
       "name": "secondary_menu_open_1",
@@ -151,7 +147,7 @@
     {
       "name": "press_escape",
       "passed": true,
-      "output": "✅ Pressed escape on pid 47191."
+      "output": "已向目标应用发送按键 escape"
     },
     {
       "name": "secondary_menu_closed_1",
@@ -171,8 +167,9 @@
       "output": "Computer Use 已停止"
     }
   ],
+  "cgoEnabled": false,
   "cleanup": {
     "fixtureExited": true,
-    "daemonStopped": true
+    "externalHelperUsed": false
   }
 }

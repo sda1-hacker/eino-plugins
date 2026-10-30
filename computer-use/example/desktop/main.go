@@ -22,7 +22,6 @@ func main() {
 func run() error {
 	appID := flag.String("app", "", "要批准并读取的应用标识，例如 com.apple.TextEdit 或 pid:123")
 	provider := flag.String("provider", "", "Provider ID；默认根据当前系统选择")
-	helper := flag.String("helper", "", "macOS helper 可执行文件路径")
 	permissions := flag.Bool("request-permissions", false, "请求 macOS 无障碍和屏幕录制权限")
 	flag.Parse()
 	if *appID == "" {
@@ -35,7 +34,7 @@ func run() error {
 	defer timeout()
 	settings := computeruse.DefaultSettings()
 	settings.Enabled = true
-	desktop, err := computeruse.NewComputerUseTool(ctx, &computeruse.Config{Settings: &settings, DefaultProviderID: *provider, Model: &computeruse.ModelInfo{Input: []string{"image"}}, MacOS: &computeruse.MacOSConfig{Command: *helper}, ConfirmApp: func(_ context.Context, request computeruse.ApprovalRequest) (computeruse.ApprovalDecision, error) {
+	desktop, err := computeruse.NewComputerUseTool(ctx, &computeruse.Config{Settings: &settings, DefaultProviderID: *provider, Model: &computeruse.ModelInfo{Input: []string{"image"}}, ConfirmApp: func(_ context.Context, request computeruse.ApprovalRequest) (computeruse.ApprovalDecision, error) {
 		if request.Approval.AppID != *appID {
 			return computeruse.ApprovalDecision{Status: "denied"}, nil
 		}

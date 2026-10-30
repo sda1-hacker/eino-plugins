@@ -1,4 +1,4 @@
-// eino 演示把 computer 工具直接交给 Eino ToolsNode，验证图片没有退化为文本。
+// local 使用模拟桌面演示 Eino ToolsNode 调用，不需要模型 API 或系统权限。
 package main
 
 import (

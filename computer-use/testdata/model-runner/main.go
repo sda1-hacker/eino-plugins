@@ -1,4 +1,4 @@
-// 由 scripts/verify-native.mjs --model 复制到临时独立模块运行。
+// 由 testdata/verify.mjs --model 复制到临时独立模块运行。
 // 这里只使用验证窗口，不向模型暴露环境变量、文件工具或其他应用截图。
 package main
 
@@ -199,7 +199,6 @@ func main() {
 	}
 }
 func run() (runErr error) {
-	helper := flag.String("helper", "", "原生 helper 路径")
 	path := flag.String("report", "model-verification.json", "报告路径")
 	requestPermissions := flag.Bool("request-permissions", false, "显式请求系统权限")
 	flag.Parse()
@@ -227,9 +226,10 @@ func run() (runErr error) {
 	}
 	settings := computeruse.DefaultSettings()
 	settings.Enabled = true
+	provider := computeruse.NewMacOSProvider(nil)
 	desktop, err := computeruse.NewComputerUseTool(ctx, &computeruse.Config{
-		Settings: &settings, Providers: []computeruse.Provider{computeruse.NewMacOSProvider(&computeruse.MacOSConfig{Command: *helper, DisableCursor: true, SocketPath: filepath.Join(filepath.Dir(*path), "model-helper.sock")})},
-		DefaultProviderID: "macos:cua", Model: &computeruse.ModelInfo{Input: []string{"image"}},
+		Settings: &settings, Providers: []computeruse.Provider{provider},
+		DefaultProviderID: provider.ID(), Model: &computeruse.ModelInfo{Input: []string{"image"}},
 		ConfirmApp: func(_ context.Context, request computeruse.ApprovalRequest) (computeruse.ApprovalDecision, error) {
 			status := "denied"
 			if request.Approval.AppID == fixtureID {
@@ -247,7 +247,7 @@ func run() (runErr error) {
 		}
 	}()
 	if *requestPermissions {
-		if _, err = desktop.Host().RequestPermissions(ctx, "macos:cua"); err != nil {
+		if _, err = desktop.Host().RequestPermissions(ctx, provider.ID()); err != nil {
 			return err
 		}
 	}

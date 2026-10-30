@@ -39,7 +39,7 @@ type report struct {
 	Passed    bool         `json:"passed"`
 	Blocked   bool         `json:"blocked"`
 	Reason    string       `json:"reason,omitempty"`
-	Helper    string       `json:"helper"`
+	Backend   string       `json:"backend"`
 	Steps     []stepResult `json:"steps"`
 }
 
@@ -50,11 +50,12 @@ func main() {
 	}
 }
 func run() (runErr error) {
-	helper := flag.String("helper", "", "本次编译的 helper 路径")
 	reportPath := flag.String("report", ".cache/validation/native-verification.json", "验证报告路径")
 	requestPermissions := flag.Bool("request-permissions", false, "显式请求系统无障碍权限")
 	flag.Parse()
-	r := report{StartedAt: time.Now(), Helper: *helper}
+	r := report{StartedAt: time.Now()}
+	provider := computeruse.NewMacOSProvider(nil)
+	r.Backend = provider.ID()
 	defer func() {
 		if runErr != nil {
 			r.Reason = runErr.Error()
@@ -66,14 +67,11 @@ func run() (runErr error) {
 		}
 		fmt.Println(string(b))
 	}()
-	if *helper == "" {
-		return fmt.Errorf("需要指定 -helper")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	settings := computeruse.DefaultSettings()
 	settings.Enabled = true
-	desktop, err := computeruse.NewComputerUseTool(ctx, &computeruse.Config{Settings: &settings, Providers: []computeruse.Provider{computeruse.NewMacOSProvider(&computeruse.MacOSConfig{Command: *helper, DisableCursor: true, SocketPath: filepath.Join(filepath.Dir(*reportPath), "native-helper.sock")})}, DefaultProviderID: "macos:cua", Model: &computeruse.ModelInfo{Input: []string{"image"}}, ConfirmApp: func(_ context.Context, request computeruse.ApprovalRequest) (computeruse.ApprovalDecision, error) {
+	desktop, err := computeruse.NewComputerUseTool(ctx, &computeruse.Config{Settings: &settings, Providers: []computeruse.Provider{provider}, DefaultProviderID: provider.ID(), Model: &computeruse.ModelInfo{Input: []string{"image"}}, ConfirmApp: func(_ context.Context, request computeruse.ApprovalRequest) (computeruse.ApprovalDecision, error) {
 		status := "denied"
 		if request.Approval.AppID == fixtureAppID {
 			status = "approved"
@@ -90,7 +88,7 @@ func run() (runErr error) {
 		}
 	}()
 	if *requestPermissions {
-		status, err := desktop.Host().RequestPermissions(ctx, "macos:cua")
+		status, err := desktop.Host().RequestPermissions(ctx, provider.ID())
 		if err != nil {
 			return err
 		}

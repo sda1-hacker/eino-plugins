@@ -2,8 +2,34 @@ package computeruse
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
+
+// Config 延续 browseruse 的构造配置风格，审批与 UI 事件由宿主应用接入。
+// 回调同步执行；回调中不要重新调用同一个 Host，以免等待自身的执行队列。
+type Config struct {
+	Settings                    *Settings
+	Providers                   []Provider
+	DefaultProviderID           string
+	Platform                    string
+	Session                     Session
+	Model                       *ModelInfo
+	PrimaryAgentID              string
+	PermissionMode              PermissionMode
+	ReviewApp                   ApprovalHandler
+	ConfirmApp                  ApprovalHandler
+	OnEvent                     func(context.Context, Event)
+	LeaseTTL                    time.Duration
+	SnapshotTTL                 time.Duration
+	MaxSnapshotBytes            int
+	PreserveSnapshotAfterAction bool
+	MacOS                       *MacOSConfig
+	Windows                     *WindowsConfig
+	// Host 非空时多个 Tool 共用同一桌面执行队列，工具 Cleanup 不关闭共享 Host。
+	Host *Host
+}
 
 // Action 表示 computer 工具的动作；像素动作只用于返回兼容的能力错误。
 type Action string
@@ -38,7 +64,7 @@ var modelActions = []Action{
 }
 var elementActions = []Action{ActionClickElement, ActionTypeText, ActionScroll, ActionSecondary}
 
-// Param 与 browseruse.Param 一样使用 action 分发；字段名兼容 OpenHanako。
+// Param 使用 action 选择动作，其他字段提供应用、快照或输入参数。
 type Param struct {
 	Action     Action  `json:"action"`
 	ProviderID string  `json:"providerId,omitempty"`
@@ -282,4 +308,53 @@ type ToolResult struct {
 	Base64Image string         `json:"base64_image,omitempty"`
 	MIMEType    string         `json:"mime_type,omitempty"`
 	Details     map[string]any `json:"details,omitempty"`
+}
+
+// ErrorCode 表示业务错误类型，方便 Agent 判断是否应刷新状态或停止操作。
+type ErrorCode string
+
+const (
+	ErrDisabled              ErrorCode = "COMPUTER_USE_DISABLED"
+	ErrRequiresVisionModel   ErrorCode = "COMPUTER_USE_REQUIRES_VISION_MODEL"
+	ErrOSPermissionDenied    ErrorCode = "OS_PERMISSION_DENIED"
+	ErrAppApprovalRequired   ErrorCode = "APP_APPROVAL_REQUIRED"
+	ErrLeaseNotFound         ErrorCode = "LEASE_NOT_FOUND"
+	ErrLeaseReleased         ErrorCode = "LEASE_RELEASED"
+	ErrStaleSnapshot         ErrorCode = "STALE_SNAPSHOT"
+	ErrTargetNotFound        ErrorCode = "TARGET_NOT_FOUND"
+	ErrCapabilityUnsupported ErrorCode = "CAPABILITY_UNSUPPORTED"
+	ErrActionBlocked         ErrorCode = "ACTION_BLOCKED_BY_POLICY"
+	ErrRequiresForeground    ErrorCode = "ACTION_REQUIRES_FOREGROUND"
+	ErrInputApprovalRequired ErrorCode = "ACTION_REQUIRES_INPUT_INJECTION_APPROVAL"
+	ErrProviderUnavailable   ErrorCode = "PROVIDER_UNAVAILABLE"
+	ErrProviderCrashed       ErrorCode = "PROVIDER_CRASHED"
+	ErrInvalidArgument       ErrorCode = "INVALID_ARGUMENT"
+)
+
+type ComputerUseError struct {
+	Code    ErrorCode      `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+	Cause   error          `json:"-"`
+}
+
+func (e *ComputerUseError) Error() string { return fmt.Sprintf("%s: %s", e.Code, e.Message) }
+func (e *ComputerUseError) Unwrap() error { return e.Cause }
+func failure(code ErrorCode, message string, details ...map[string]any) *ComputerUseError {
+	e := &ComputerUseError{Code: code, Message: message}
+	if len(details) > 0 {
+		e.Details = details[0]
+	}
+	return e
+}
+func ErrorHasCode(err error, code ErrorCode) bool {
+	var e *ComputerUseError
+	return errors.As(err, &e) && e.Code == code
+}
+func errorResult(err error) *ToolResult {
+	var e *ComputerUseError
+	if errors.As(err, &e) {
+		return &ToolResult{Error: e.Message, ErrorCode: e.Code, Details: e.Details}
+	}
+	return &ToolResult{Error: err.Error(), ErrorCode: ErrProviderCrashed}
 }

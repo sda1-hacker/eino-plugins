@@ -1,8 +1,11 @@
 module github.com/sda1-hacker/eino-plugins/computer-use
 
-go 1.23.0
+go 1.25.0
 
-require github.com/cloudwego/eino v0.9.22
+require (
+	github.com/cloudwego/eino v0.9.22
+	github.com/ebitengine/purego v0.11.1
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

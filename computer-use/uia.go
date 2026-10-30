@@ -1,6 +1,7 @@
 package computeruse
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -371,4 +373,252 @@ func (p *WindowsProvider) Dispose(context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// 原生协议使用 UseNumber，防止窗口句柄被浮点转换损失精度。
+func decodeNative(data string) (any, error) {
+	var v any
+	d := json.NewDecoder(strings.NewReader(data))
+	d.UseNumber()
+	err := d.Decode(&v)
+	return v, err
+}
+func object(v any) map[string]any { m, _ := v.(map[string]any); return m }
+func array(v any) []any           { a, _ := v.([]any); return a }
+func str(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case json.Number:
+		return x.String()
+	default:
+		return fmt.Sprint(v)
+	}
+}
+func number(v any) float64 { n, _ := strconv.ParseFloat(str(v), 64); return n }
+func integer(v any) int    { return int(number(v)) }
+func boolean(v any) bool   { b, _ := v.(bool); return b }
+func boolPointer(v any) *bool {
+	b, ok := v.(bool)
+	if !ok {
+		return nil
+	}
+	return &b
+}
+func first(values ...any) any {
+	for _, v := range values {
+		if v == nil {
+			continue
+		}
+		if text, ok := v.(string); ok && text == "" {
+			continue
+		}
+		return v
+	}
+	return nil
+}
+func firstString(values ...any) string { return str(first(values...)) }
+func stringsOf(v any) []string {
+	var out []string
+	for _, x := range array(v) {
+		out = append(out, str(x))
+	}
+	return out
+}
+func boundsOf(v any) *Bounds {
+	m := object(v)
+	if len(m) == 0 {
+		return nil
+	}
+	return &Bounds{X: number(m["x"]), Y: number(m["y"]), Width: number(m["width"]), Height: number(m["height"])}
+}
+func windowsOf(v any) []Window {
+	out := []Window{}
+	for _, x := range array(v) {
+		m := object(x)
+		id := firstString(m["window_id"], m["windowId"], m["id"], m["nativeWindowHandle"])
+		if id == "" {
+			continue
+		}
+		out = append(out, Window{
+			WindowID:       id,
+			Title:          firstString(m["title"], m["name"]),
+			Bounds:         boundsOf(m["bounds"]),
+			IsOnScreen:     boolPointer(first(m["is_on_screen"], m["isOnScreen"])),
+			OnCurrentSpace: boolPointer(first(m["on_current_space"], m["onCurrentSpace"])),
+		})
+	}
+	return out
+}
+func appsOf(v any) []App {
+	items := array(v)
+	if items == nil {
+		m := object(v)
+		items = array(first(m["apps"], m["items"]))
+	}
+	out := []App{}
+	for _, x := range items {
+		m := object(x)
+		pid := integer(first(m["pid"], m["process_id"], m["processId"]))
+		id := firstString(m["bundle_id"], m["bundleId"], m["appId"], m["id"])
+		if id == "" && pid > 0 {
+			id = fmt.Sprintf("pid:%d", pid)
+		}
+		if id == "" {
+			continue
+		}
+		out = append(out, App{
+			AppID:        id,
+			Name:         firstString(m["name"], m["localized_name"], m["displayName"], id),
+			PID:          pid,
+			Active:       boolean(first(m["active"], m["is_active"])),
+			Windows:      windowsOf(m["windows"]),
+			ProviderData: map[string]any{"bundleId": id, "pid": pid},
+		})
+	}
+	return out
+}
+
+// CommandRunner 可注入测试替身；参数独立传递，禁止经 shell 拼接执行。
+type Command struct {
+	Name           string
+	Args           []string
+	Env            map[string]string
+	Timeout        time.Duration
+	MaxOutputBytes int
+}
+type CommandResult struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
+}
+type ManagedProcess interface {
+	Kill() error
+	Done() <-chan struct{}
+}
+type CommandRunner interface {
+	Run(context.Context, Command) (CommandResult, error)
+	Start(Command) (ManagedProcess, error)
+}
+type ExecRunner struct{}
+
+type boundedBuffer struct {
+	// 不嵌入 bytes.Buffer，避免 io.Copy 调用其 ReaderFrom 绕过下面的容量检查。
+	buffer   bytes.Buffer
+	limit    int
+	overflow bool
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := b.limit - b.buffer.Len()
+	if remaining < 0 {
+		remaining = 0
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+		b.overflow = true
+	}
+	_, _ = b.buffer.Write(p)
+	return n, nil
+}
+
+func (b *boundedBuffer) String() string { return b.buffer.String() }
+func makeCommand(c Command) *exec.Cmd {
+	cmd := exec.Command(c.Name, c.Args...)
+	env := map[string]string{}
+	for _, entry := range os.Environ() {
+		k, v, ok := strings.Cut(entry, "=")
+		if ok {
+			env[k] = v
+		}
+	}
+	for k, v := range c.Env {
+		env[k] = v
+	}
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	configureProcess(cmd)
+	return cmd
+}
+func (ExecRunner) Run(ctx context.Context, c Command) (CommandResult, error) {
+	if c.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		defer cancel()
+	}
+	if err := ctx.Err(); err != nil {
+		return CommandResult{}, err
+	}
+	cmd := makeCommand(c)
+	limit := c.MaxOutputBytes
+	if limit <= 0 {
+		limit = 32 << 20
+	}
+	out := &boundedBuffer{limit: limit}
+	stderr := &boundedBuffer{limit: 64 << 10}
+	cmd.Stdout = out
+	cmd.Stderr = stderr
+	cmd.WaitDelay = time.Second
+	if err := cmd.Start(); err != nil {
+		return CommandResult{}, err
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = killProcess(cmd)
+		case <-done:
+		}
+	}()
+	err := cmd.Wait()
+	close(done)
+	result := CommandResult{Stdout: out.String(), Stderr: stderr.String(), ExitCode: cmd.ProcessState.ExitCode()}
+	if ctx.Err() != nil {
+		return result, ctx.Err()
+	}
+	if out.overflow || stderr.overflow {
+		return result, fmt.Errorf("helper 输出超过大小限制")
+	}
+	var exitErr *exec.ExitError
+	if err != nil && !asExitError(err, &exitErr) {
+		return result, err
+	}
+	return result, nil
+}
+func asExitError(err error, target **exec.ExitError) bool {
+	v, ok := err.(*exec.ExitError)
+	if ok {
+		*target = v
+	}
+	return ok
+}
+
+type execProcess struct {
+	cmd  *exec.Cmd
+	done chan struct{}
+	once sync.Once
+}
+
+func (p *execProcess) Kill() error {
+	var err error
+	p.once.Do(func() { err = killProcess(p.cmd) })
+	return err
+}
+func (p *execProcess) Done() <-chan struct{} { return p.done }
+func (ExecRunner) Start(c Command) (ManagedProcess, error) {
+	cmd := makeCommand(c)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	p := &execProcess{cmd: cmd, done: make(chan struct{})}
+	go func() { _ = cmd.Wait(); close(p.done) }()
+	return p, nil
 }
