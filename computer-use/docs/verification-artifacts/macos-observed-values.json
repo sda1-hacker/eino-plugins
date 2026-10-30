@@ -1,0 +1,25 @@
+{
+  "snapshotId": "2d88c6da186bb721a7384d943b6c37a7",
+  "providerId": "macos:cua",
+  "observedElements": [
+    {
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ],
+      "automationId": "eino-validation-input",
+      "elementId": "1",
+      "enabled": true,
+      "label": "Eino 验证输入框",
+      "role": "AXTextField",
+      "value": "Eino 真实桌面验证：中文输入成功"
+    },
+    {
+      "automationId": "eino-validation-button",
+      "elementId": "2",
+      "enabled": true,
+      "label": "Eino 验证按钮，已点击 1 次",
+      "role": "AXButton"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+# 本地编辑器配置
+.idea/
+.vscode/
+.DS_Store
+
+# 本地多模块联调工作区
+go.work
+go.work.sum
+
+# 构建缓存与产物
+.cache/
+.build/
+dist-computer-use/
+*.test
+*.exe
+coverage.out
+
+# 本地运行配置
+.env
+.env.*
+!.env.example

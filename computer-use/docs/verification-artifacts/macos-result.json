@@ -1,0 +1,55 @@
+{
+  "startedAt": "2026-10-30T10:06:49.4952+08:00",
+  "passed": true,
+  "blocked": false,
+  "helper": "/Users/sda1_hacker/Desktop/humbert/eino-computer-use/dist-computer-use/mac-arm64/hana-computer-use-helper",
+  "steps": [
+    {
+      "name": "list_apps",
+      "passed": true
+    },
+    {
+      "name": "start_fixture",
+      "passed": true
+    },
+    {
+      "name": "observe_fixture",
+      "passed": true
+    },
+    {
+      "name": "decode_real_screenshot",
+      "passed": true
+    },
+    {
+      "name": "type_chinese",
+      "passed": true
+    },
+    {
+      "name": "observe_typed_text",
+      "passed": true
+    },
+    {
+      "name": "verify_chinese_value",
+      "passed": true
+    },
+    {
+      "name": "click_button",
+      "passed": true
+    },
+    {
+      "name": "observe_clicked_button",
+      "passed": true
+    },
+    {
+      "name": "verify_button_effect",
+      "passed": true
+    },
+    {
+      "name": "stop",
+      "passed": true
+    }
+  ],
+  "cleanup": {
+    "remaining_validation_processes": []
+  }
+}

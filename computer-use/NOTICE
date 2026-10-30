@@ -1,0 +1,29 @@
+Eino Computer Use
+
+This project ports the computer-use implementation of OpenHanako to Go and
+adapts it to CloudWeGo Eino. Chinese comments and integration code were added.
+
+OpenHanako
+Copyright 2025 liliMozi
+Licensed under the Apache License, Version 2.0.
+Source: https://github.com/liliMozi/openhanako
+Baseline: 9a6cabf8c513db5edc6cf8179a538c9075885c6e
+
+Ported/adapted files include the computer-use host, lease/provider contracts,
+macOS Cua provider, Windows UIA provider, native Swift helper, cursor asset,
+and build-time Cua source patches. The Windows helper was extracted from
+windows-uia-script.ts; its scroll amount handling was corrected. The Go port
+adds cancellation, serialized execution, bounded snapshot storage, strict
+argument validation, Eino multimodal output and a legacy text adapter.
+Native build verification added macOS 14 SDK concurrency annotation fixes,
+PID-based actor-boundary handling for focus restoration, Swift 6.2 dependency
+preflight checks, and frozen dependency resolution.
+
+The public Config / Param / Tool / Execute / Cleanup API is inspired by
+CloudWeGo Eino-ext's BrowserUse tool (Copyright 2025 CloudWeGo Authors,
+Apache-2.0):
+https://github.com/cloudwego/eino-ext/tree/main/components/tool/browseruse
+
+The Swift helper resolves trycua/cua and the MCP Swift SDK via Swift Package
+Manager. Their respective licenses and notices apply to those dependencies;
+no prebuilt dependency or helper executable is included in this source tree.
