@@ -11,9 +11,9 @@
 ```sh
 cd computer-use
 GOWORK=off go mod tidy
+GOWORK=off CGO_ENABLED=0 go test ./...
 GOWORK=off go test -race ./...
 GOWORK=off go vet ./...
-node --test scripts/build-computer-use-helper.test.mjs
 GOWORK=off go list .
 ```
 
@@ -32,7 +32,7 @@ git tag -a computer-use/v0.1.0 -m "computer-use v0.1.0"
 git push origin computer-use/v0.1.0
 ```
 
-`computer-use/v0.1.0` 是仓库标签；使用者填写的 Go 版本仍为 `v0.1.0`。这是 [Go 子目录模块的版本映射规则](https://go.dev/ref/mod#vcs-version)。发布 `sandboxfs` 时使用 `sandboxfs/v0.1.0`，检查命令在 `sandboxfs` 目录执行，无需运行 computer-use 的 Node.js 检查。
+`computer-use/v0.1.0` 是仓库标签；使用者填写的 Go 版本仍为 `v0.1.0`。这是 [Go 子目录模块的版本映射规则](https://go.dev/ref/mod#vcs-version)。发布 `sandboxfs` 时使用 `sandboxfs/v0.1.0`，检查命令在 `sandboxfs` 目录执行。
 
 模块达到 v2 或更高主版本时，`module` 与导入路径需要增加 `/v2` 等主版本后缀。已经发布的版本保持不变，修复通过新版本发布，详见 [Go 发布指南](https://go.dev/doc/modules/publishing)。
 
@@ -54,8 +54,8 @@ GOWORK=off go list github.com/sda1-hacker/eino-plugins/computer-use
 
 ## 模块中应包含的文件
 
-每个组件保留自己的 `LICENSE`、README、`go.mod`、`go.sum` 和编译所需资源；有上游移植代码时同时保留 NOTICE。Go 包说明由带中文注释的 `doc.go` 或包注释生成。
+每个组件保留 README、`go.mod`、`go.sum` 和编译所需资源，并保留适用的许可证与来源声明。Go 包说明可直接放在入口文件的 package 注释中，例如 computer-use 的 `computeruse.go`，不必单独建立 `doc.go`。
 
-computer-use 的 Windows helper 使用 `go:embed`，随模块源码携带；macOS helper 的 Swift 源码和构建脚本保留在该模块中，原生可执行文件需要由宿主构建或显式配置。`go get` 不会自动编译 Swift、安装 Node.js 或设置系统权限。
+computer-use 的 macOS 默认后端随 Go 程序编译，通过 purego 调用系统框架，支持 `CGO_ENABLED=0`，不需要 Swift / Node.js / 外部 helper。组件不提供外部 macOS 驱动兼容入口。Windows helper 仍使用 `go:embed` 携带 PowerShell 脚本。`go get` 不会安装系统权限或外部运行环境。
 
 构建缓存、IDE 配置、原生二进制和本地 `go.work` 均不提交。新增模块时不要在组件目录再次初始化 `.git`。

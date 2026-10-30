@@ -6,7 +6,7 @@
 
 | 组件 | 模块路径 | 说明 | Go 版本 |
 | --- | --- | --- | --- |
-| [computer-use](computer-use/) | `github.com/sda1-hacker/eino-plugins/computer-use` | 桌面应用观察、截图与语义操作，支持 Eino 多模态工具接口 | 1.23+ |
+| [computer-use](computer-use/) | `github.com/sda1-hacker/eino-plugins/computer-use` | macOS 默认纯 Go 桌面观察与语义操作，支持 Eino 多模态工具接口 | 1.25+ |
 | [sandboxfs](sandboxfs/) | `github.com/sda1-hacker/eino-plugins/sandboxfs` | 工作区文件操作与沙箱命令执行，接入 Eino filesystem | 1.27.1+ |
 
 组件发布后，在自己的 Go 项目中安装：
@@ -42,14 +42,17 @@ eino-plugins/
 ├── computer-use/
 │   ├── go.mod            # module .../eino-plugins/computer-use
 │   ├── go.sum
-│   ├── doc.go
-│   ├── computeruse.go    # 公开包直接位于模块根目录
+│   ├── computeruse.go    # 工具入口与包说明
+│   ├── types.go          # 配置、参数、结果及接口
+│   ├── host.go           # 会话、授权与快照
+│   ├── provider.go
+│   ├── uia.go
+│   ├── platform_*.go
+│   ├── example/
+│   ├── testdata/
 │   ├── assets/
-│   ├── desktop/
-│   ├── examples/
-│   ├── scripts/
 │   ├── docs/
-│   ├── LICENSE
+│   ├── README.md
 │   └── NOTICE
 └── sandboxfs/
     ├── go.mod            # module .../eino-plugins/sandboxfs
@@ -70,7 +73,7 @@ eino-plugins/
 cd computer-use
 GOWORK=off go test -race ./...
 GOWORK=off go vet ./...
-go run ./examples/eino
+go run ./example/local
 ```
 
 测试 `sandboxfs` 时先进入 `sandboxfs`。真实桌面和真实沙箱的验证方法见各组件 README，普通单元测试无需调用模型服务。
