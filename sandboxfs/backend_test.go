@@ -810,7 +810,7 @@ func TestLinuxLauncherEnvironment(t *testing.T) {
 			}
 			bind := slices.Index(cmd.Args, "--bind")
 			if bind < 0 || !slices.Equal(cmd.Args[bind+1:bind+3], []string{workspace, workspace}) ||
-				!slices.Equal(cmd.Args[len(cmd.Args)-4:], []string{"--", "/bin/sh", "-c", command}) {
+				!slices.Equal(cmd.Args[len(cmd.Args)-6:], []string{"--", "/bin/sh", "-c", unixShellReady, "sandboxfs", command}) {
 				t.Fatalf("工作区映射或命令参数错误: %q", cmd.Args)
 			}
 			if cmd.Env == nil || cmd.Dir != "/" {

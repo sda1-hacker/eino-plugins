@@ -123,7 +123,7 @@ if result.ExitCode == nil || *result.ExitCode != 0 {
 
 `Output` 包含合并后的标准输出和标准错误。普通非零退出通过 `ExitCode` 返回，超时、取消和沙箱启动失败通过 `error` 返回，因此调用方需要同时检查两者。输出超限时会终止命令并设置 `Truncated`。
 
-流式执行使用 `ExecuteStreaming`，调用方应持续读取并关闭返回的 reader；提前停止消费时，同时取消传入的 context。
+流式执行使用 `ExecuteStreaming`，调用方应持续读取并关闭返回的 reader；提前停止消费时，同时取消传入的 context。为避免背压阻塞资源清理，每次执行最多即时发送 256 个输出片段，后续输出合并为结束前的一个片段；总输出仍限制为 1 MiB。暂停读取不会阻止命令超时和资源清理。
 
 ## 配置
 
@@ -156,6 +156,8 @@ type Config struct {
 
 ## 平台支持
 
+当前依赖不支持 32 位架构（Sonic 在 `386` 下无法编译）。发布目标为 `amd64` 和 `arm64`；交叉编译通过不代表已完成目标系统运行验证。
+
 | 平台 | 文件操作 | Shell 实现与要求 |
 | --- | --- | --- |
 | macOS | 支持 | Seatbelt，依赖 `/usr/bin/sandbox-exec` |
@@ -168,13 +170,15 @@ type Config struct {
 
 Shell 可读写工作区和每次运行的独立临时空间，并只读访问运行所需的系统目录。macOS 开放 `/usr`、`/bin`、`/System/Library`；Linux 开放存在的 `/usr`、`/bin`、`/lib`、`/lib64`。开启网络时额外提供必要的 DNS 和证书配置。
 
-Linux 需自行安装 Bubblewrap。macOS 的 `sandbox-exec` 已被系统标记为弃用，部署时应在目标系统版本上验证兼容性。
+Linux 需自行安装 Bubblewrap。网络命名空间不能阻止访问已经挂载进沙箱的文件系统 Unix socket；工作区不应包含 Docker、D-Bus 等宿主服务 socket，也不应将宿主根目录、`/run` 等系统目录作为工作区。这是 [Bubblewrap 明确说明的隔离边界](https://github.com/containers/bubblewrap#sandbox-security)，文件只读挂载也不能代替 IPC 权限隔离。
+
+macOS 的 `sandbox-exec` 已被系统标记为弃用，部署时应在目标系统版本上验证兼容性。
 
 ### Windows
 
 要求 Windows 10 1703 / Server 2019 或更新版本、支持持久 ACL 的本地磁盘，以及当前用户对工作区的 ACL 修改权限。Shell 不支持 UNC 或设备路径工作区。
 
-实现直接通过 Go 调用 Win32 API，每次命令创建独立的 LPAC 身份，临时授予工作区访问权限，并使用私有 Desktop 和 Job Object 管理进程及其后代。命令结束后撤销授权并清理私有目录和身份配置；授权遍历最多 10000 项。
+实现直接通过 Go 调用 Win32 API，每次命令创建独立的 LPAC 身份，临时授予工作区访问权限，并使用私有 Desktop 和 Job Object 管理进程及其后代。命令结束后撤销授权并清理私有目录和身份配置；启动前的授权遍历最多 10000 项。结束后的权限撤销分批遍历，不受该条目上限限制；单个对象失败会继续清理其他对象并汇总错误，清理扫描仍受 5 秒超时限制。
 
 开启网络后，访问宿主机本地服务的回环连接仍受 Windows 系统限制。未授权的第三方工具目录及 PowerShell / .NET 所需的额外系统资源可能不可用。
 
@@ -193,6 +197,8 @@ Windows Shell 尚未完成目标平台运行验证；交叉编译通过不能代
 | `Execute` | 同步执行沙箱命令 |
 | `ExecuteStreaming` | 流式执行沙箱命令 |
 | `Close` | 释放工作区目录句柄 |
+
+`GrepRaw` 的 Glob 路径相对请求的搜索目录匹配，也支持仅按文件名匹配。
 
 当前不支持多模态读取、后台任务，以及 Grep 的多行模式和上下文选项。
 
@@ -218,10 +224,11 @@ Shell 使用最小环境，HOME、临时文件及常用工具缓存位于每次�
 以下命令在当前 `sandboxfs` 模块根目录执行；从仓库根目录开始时，先运行 `cd sandboxfs`。
 
 - [命令执行示例](example/cmd/main.go)
-- [Agent 集成示例](example/agent/main.go)：运行前修改工作区与提示词，并配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL_NAME`。
+- [Agent 集成示例](example/agent/main.go)：通过 `-workspace`、`-prompt` 指定工作区与任务，并配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL_NAME`。
 
 ```bash
 go run ./example/cmd -workspace /absolute/path/to/project -command 'echo hello'
+go run ./example/agent -workspace /absolute/path/to/project -prompt '列出工作区中的文件'
 go test -race ./...
 go vet ./...
 ```

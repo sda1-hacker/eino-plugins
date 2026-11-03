@@ -87,7 +87,7 @@ func platformCommand(ctx context.Context, workspace, command string, allowNetwor
 		cleanup()
 		return nil, nil, err
 	}
-	args = append(args, "-f", profile, "/bin/sh", "-c", command)
+	args = append(args, "-f", profile, "/bin/sh", "-c", unixShellReady, "sandboxfs", command)
 	cmd := exec.CommandContext(ctx, seatbeltPath, args...)
 	cmd.Dir = workspace
 	cmd.Env = []string{
@@ -105,7 +105,7 @@ func platformCommand(ctx context.Context, workspace, command string, allowNetwor
 		}
 		return err
 	}
-	return execCommand{cmd}, cleanup, nil
+	return execCommand{Cmd: cmd, ctx: ctx}, cleanup, nil
 }
 
 // 非阻塞打开后再检查文件类型，避免 FIFO 在 Stat 之前阻塞。

@@ -29,10 +29,11 @@ import (
 )
 
 const (
-	maxFileBytes   = 4 << 20 // 单文件最多 4 MiB
-	maxShellOutput = 1 << 20 // 命令输出最多 1 MiB
-	maxWalkEntries = 10000
-	maxMatches     = 1000
+	maxFileBytes    = 4 << 20 // 单文件最多 4 MiB
+	maxShellOutput  = 1 << 20 // 命令输出最多 1 MiB
+	maxWalkEntries  = 10000
+	maxMatches      = 1000
+	maxStreamChunks = 256 // 后续输出合并；总字节数仍受 maxShellOutput 限制
 )
 
 var (
@@ -49,11 +50,35 @@ type sandboxCommand interface {
 	Cancel() error
 }
 
-type execCommand struct{ *exec.Cmd }
+// unixShellReady 在系统沙箱内执行，fd 3 仅用于启动握手，不传给用户命令。
+const unixShellReady = `printf '.' >&3 || exit 125; exec 3>&-; exec /bin/sh -c "$1"`
+
+type execCommand struct {
+	*exec.Cmd
+	ctx context.Context
+}
 
 func (c execCommand) Start(output *os.File) error {
+	ready, signal, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	defer ready.Close()
+	defer signal.Close()
+	c.ExtraFiles = []*os.File{signal}
 	c.Stdout, c.Stderr = output, output
-	return c.Cmd.Start()
+	if err := c.Cmd.Start(); err != nil {
+		return err
+	}
+	signal.Close()
+	stop := context.AfterFunc(c.ctx, func() { _ = ready.Close() })
+	defer stop()
+	var marker [1]byte
+	if _, err := io.ReadFull(ready, marker[:]); err != nil || marker[0] != '.' {
+		_ = c.Cancel()
+		return errors.Join(fmt.Errorf("沙箱启动握手失败: %w", ErrShellUnavailable), err, c.Cmd.Wait(), c.ctx.Err())
+	}
+	return nil
 }
 
 func (c execCommand) Cancel() error { return c.Cmd.Cancel() }
@@ -227,6 +252,9 @@ func (b *Backend) Write(ctx context.Context, req *filesystem.WriteRequest) error
 	if err != nil {
 		return err
 	}
+	if len(req.Content) > maxFileBytes {
+		return fmt.Errorf("%w: 写入内容超过 %d 字节", ErrDenied, maxFileBytes)
+	}
 	return b.put(rel, []byte(req.Content))
 }
 
@@ -257,7 +285,11 @@ func (b *Backend) Edit(ctx context.Context, req *filesystem.EditRequest) error {
 	}
 	n := 1
 	if req.ReplaceAll {
-		n = -1
+		n = count
+	}
+	// 先用除法检查增长，避免乘法溢出和构造超大中间字符串。
+	if growth := len(req.NewString) - len(req.OldString); growth > 0 && growth > (maxFileBytes-len(content))/n {
+		return fmt.Errorf("%w: 替换后的内容超过 %d 字节", ErrDenied, maxFileBytes)
 	}
 	return b.put(rel, []byte(strings.Replace(content, req.OldString, req.NewString, n)))
 }
@@ -305,7 +337,8 @@ func (b *Backend) GrepRaw(ctx context.Context, req *filesystem.GrepRequest) ([]f
 			return nil
 		}
 		if req.Glob != "" {
-			ok, e := doublestar.Match(req.Glob, p)
+			local := relativeSearchPath(rel, p)
+			ok, e := doublestar.Match(req.Glob, local)
 			if e != nil {
 				return e
 			}
@@ -368,10 +401,7 @@ func (b *Backend) GlobInfo(ctx context.Context, req *filesystem.GlobInfoRequest)
 		if p == rel {
 			return nil
 		}
-		local := strings.TrimPrefix(strings.TrimPrefix(p, rel), "/")
-		if rel == "." {
-			local = p
-		}
+		local := relativeSearchPath(rel, p)
 		ok, err := doublestar.Match(req.Pattern, local)
 		if err != nil {
 			return err
@@ -390,6 +420,17 @@ func (b *Backend) GlobInfo(ctx context.Context, req *filesystem.GlobInfoRequest)
 	return out, err
 }
 
+// relativeSearchPath 返回相对请求搜索目录的路径；单文件搜索使用文件名。
+func relativeSearchPath(base, p string) string {
+	if base == "." {
+		return p
+	}
+	if p == base {
+		return path.Base(p)
+	}
+	return strings.TrimPrefix(p, base+"/")
+}
+
 // Execute 提供同步执行能力：直接复用 ExecuteStreaming 的隔离、超时、
 // 输出上限及退出码处理，避免同步/流式实现出现安全策略分叉。
 func (b *Backend) Execute(ctx context.Context, req *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
@@ -403,7 +444,7 @@ func (b *Backend) Execute(ctx context.Context, req *filesystem.ExecuteRequest) (
 
 // ExecuteStreaming 仅通过操作系统级沙箱执行命令，不允许退回宿主机执行。
 func (b *Backend) ExecuteStreaming(ctx context.Context, req *filesystem.ExecuteRequest) (*schema.StreamReader[*filesystem.ExecuteResponse], error) {
-	if req == nil || strings.TrimSpace(req.Command) == "" {
+	if req == nil || strings.TrimSpace(req.Command) == "" || strings.ContainsRune(req.Command, 0) {
 		return nil, ErrDenied
 	}
 	if req.RunInBackendGround {
@@ -454,7 +495,7 @@ func (b *Backend) ExecuteStreaming(ctx context.Context, req *filesystem.ExecuteR
 	// 主进程退出后 os/exec 不再监听 ctx；脱离进程组的后代仍可能持有写端。
 	// 超时直接解除管道读取，避免等待 EOF 永久阻塞。
 	stopOutput := context.AfterFunc(runCtx, func() { _ = pr.Close() })
-	reader, writer := schema.Pipe[*filesystem.ExecuteResponse](16)
+	reader, writer := schema.Pipe[*filesystem.ExecuteResponse](maxStreamChunks + 2)
 	done := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
@@ -469,6 +510,8 @@ func (b *Backend) ExecuteStreaming(ctx context.Context, req *filesystem.ExecuteR
 		defer stopOutput()
 		buf := make([]byte, 16*1024)
 		written, truncated := 0, false
+		chunks := 0
+		var tail strings.Builder
 		for {
 			n, readErr := pr.Read(buf)
 			if n > 0 {
@@ -478,9 +521,15 @@ func (b *Backend) ExecuteStreaming(ctx context.Context, req *filesystem.ExecuteR
 				}
 				if allowed > 0 {
 					// 消费端提前 Close 时停止整个进程组，避免继续运行无人读取的命令。
-					if writer.Send(&filesystem.ExecuteResponse{Output: string(buf[:allowed])}, nil) {
-						_ = cmd.Cancel()
-						break
+					if chunks < maxStreamChunks {
+						if writer.Send(&filesystem.ExecuteResponse{Output: string(buf[:allowed])}, nil) {
+							_ = cmd.Cancel()
+							break
+						}
+						chunks++
+					} else {
+						// 总共最多 maxStreamChunks+2 个事件，不等待消费端即可清理资源。
+						tail.Write(buf[:allowed])
 					}
 					written += allowed
 				}
@@ -497,6 +546,9 @@ func (b *Backend) ExecuteStreaming(ctx context.Context, req *filesystem.ExecuteR
 		waitErr := <-done
 		// 返回结束事件前完成资源撤销；错误路径同样不能遗留 ACL/Profile。
 		cleanupErr := cleanup()
+		if tail.Len() > 0 {
+			writer.Send(&filesystem.ExecuteResponse{Output: tail.String()}, nil)
+		}
 		// Context 取消/超时应作为错误传递，不伪装为正常非零退出码。
 		if err := runCtx.Err(); err != nil && !truncated {
 			writer.Send(nil, errors.Join(fmt.Errorf("沙箱执行中断: %w", err), cleanupErr))

@@ -19,8 +19,8 @@ func main() {
 }
 
 func run() error {
-	workspace := flag.String("workspace", "/Users/sda1_hacker/Desktop/OH-WorkSpace/OH-Works", "沙箱工作区目录")
-	command := flag.String("command", "bash ./create.sh", "在沙箱工作区内执行的命令")
+	workspace := flag.String("workspace", ".", "沙箱工作区目录")
+	command := flag.String("command", "echo hello", "在沙箱工作区内执行的命令")
 	allowNetwork := flag.Bool("allow-network", false, "允许沙箱命令联网（默认禁网）")
 	flag.Parse()
 

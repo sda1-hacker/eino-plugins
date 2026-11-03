@@ -39,7 +39,7 @@ func platformCommand(ctx context.Context, workspace, command string, allowNetwor
 		"--setenv", "npm_config_cache", "/tmp/cache/npm",
 		"--setenv", "PIP_CACHE_DIR", "/tmp/cache/pip",
 		"--setenv", "LANG", "C", "--setenv", "LC_ALL", "C",
-		"--", "/bin/sh", "-c", command,
+		"--", "/bin/sh", "-c", unixShellReady, "sandboxfs", command,
 	)
 	cmd := exec.CommandContext(ctx, bwrapPath, args...)
 	// --clearenv 只管理沙箱环境；启动器也不应继承宿主机密钥或动态链接器变量。
@@ -53,7 +53,7 @@ func platformCommand(ctx context.Context, workspace, command string, allowNetwor
 		}
 		return err
 	}
-	return execCommand{cmd}, func() error { return nil }, nil
+	return execCommand{Cmd: cmd, ctx: ctx}, func() error { return nil }, nil
 }
 
 // 非阻塞打开后再检查文件类型，避免 FIFO 在 Stat 之前阻塞。

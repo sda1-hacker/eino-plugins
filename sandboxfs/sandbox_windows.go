@@ -37,6 +37,7 @@ var (
 	user32        = windows.NewLazySystemDLL("user32.dll")
 	createDesktop = user32.NewProc("CreateDesktopW")
 	closeDesktop  = user32.NewProc("CloseDesktop")
+	deleteACE     = windows.NewLazySystemDLL("advapi32.dll").NewProc("DeleteAce")
 	setSecurity   = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtSetSecurityObject")
 	windowsACLMu  sync.Mutex // Get/merge/set 必须串行；撤销时只删除本次 SID。
 )
@@ -91,7 +92,7 @@ func platformCommand(ctx context.Context, workspace, command string, allowNetwor
 }
 
 func (c *windowsCommand) prepare() error {
-	for _, proc := range []*windows.LazyProc{createProfile, deleteProfile, profileFolder, createDesktop, closeDesktop, setSecurity} {
+	for _, proc := range []*windows.LazyProc{createProfile, deleteProfile, profileFolder, createDesktop, closeDesktop, setSecurity, deleteACE} {
 		if err := proc.Find(); err != nil {
 			return err
 		}
@@ -236,11 +237,15 @@ func changeSandboxACL(h windows.Handle, sid *windows.SID, revoke bool) error {
 		entry.Inheritance = windows.OBJECT_INHERIT_ACE | windows.CONTAINER_INHERIT_ACE
 	}
 	if revoke {
-		entry.AccessMode = windows.REVOKE_ACCESS
-	}
-	acl, err = windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{entry}, acl)
-	if err != nil {
-		return err
+		// 按 SID 删除本次允许 ACE，包括新文件继承的 ACE，保留其他主体和顺序。
+		if err := removeSandboxACEs(acl, sid); err != nil {
+			return err
+		}
+	} else {
+		acl, err = windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{entry}, acl)
+		if err != nil {
+			return err
+		}
 	}
 	absolute, err := sd.ToAbsolute()
 	if err != nil {
@@ -252,6 +257,27 @@ func changeSandboxACL(h windows.Handle, sid *windows.SID, revoke bool) error {
 	status, _, _ := setSecurity.Call(uintptr(h), windows.DACL_SECURITY_INFORMATION, uintptr(unsafe.Pointer(absolute)))
 	if int32(status) < 0 {
 		return fmt.Errorf("NtSetSecurityObject: %w", windows.NTStatus(status))
+	}
+	return nil
+}
+
+// removeSandboxACEs 修改 GetSecurityInfo 返回的本地 ACL 副本；写回仍由调用方完成。
+func removeSandboxACEs(acl *windows.ACL, sid *windows.SID) error {
+	for i := int(acl.AceCount) - 1; i >= 0; i-- {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(acl, uint32(i), &ace); err != nil {
+			return err
+		}
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
+			continue
+		}
+		entrySID := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		if !entrySID.Equals(sid) {
+			continue
+		}
+		if ok, _, err := deleteACE.Call(uintptr(unsafe.Pointer(acl)), uintptr(i)); ok == 0 {
+			return fmt.Errorf("DeleteAce: %w", err)
+		}
 	}
 	return nil
 }
@@ -423,7 +449,7 @@ func (c *windowsCommand) cleanup() error {
 		errs = append(errs, changeSandboxACL(c.root, c.sid, true))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		// 包括命令新建的文件；原有对象另保留句柄，重命名后仍可撤销授权。
-		errs = append(errs, c.guard.walk(ctx, ".", func(rel string, _ os.FileInfo) error {
+		errs = append(errs, c.guard.walkCleanup(ctx, func(rel string) error {
 			h, err := c.openACLFile(rel)
 			if err != nil {
 				return err
