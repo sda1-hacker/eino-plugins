@@ -3,8 +3,6 @@
 .vscode/
 .DS_Store
 
-.CMD.md
-
 # 本地多模块联调工作区
 go.work
 go.work.sum
