@@ -6,13 +6,11 @@
 
 | 组件 | 模块路径 | 说明 | Go 版本 |
 | --- | --- | --- | --- |
-| [computer-use](computer-use/) | `github.com/sda1-hacker/eino-plugins/computer-use` | macOS 默认纯 Go 桌面观察与语义操作，支持 Eino 多模态工具接口 | 1.25+ |
 | [sandboxfs](sandboxfs/) | `github.com/sda1-hacker/eino-plugins/sandboxfs` | 工作区文件操作与沙箱命令执行，接入 Eino filesystem | 1.27.1+ |
 
 组件发布后，在自己的 Go 项目中安装：
 
 ```sh
-go get github.com/sda1-hacker/eino-plugins/computer-use
 go get github.com/sda1-hacker/eino-plugins/sandboxfs
 ```
 
@@ -22,12 +20,9 @@ go get github.com/sda1-hacker/eino-plugins/sandboxfs
 
 ```go
 import (
-    computeruse "github.com/sda1-hacker/eino-plugins/computer-use"
     "github.com/sda1-hacker/eino-plugins/sandboxfs"
 )
 ```
-
-`computer-use` 是模块目录名，Go 包名为 `computeruse`。
 
 ## 仓库结构
 
@@ -36,24 +31,6 @@ eino-plugins/
 ├── .git/                 # 整个仓库共用一份 Git 元数据
 ├── README.md
 ├── LICENSE
-├── docs/
-│   ├── releasing.md      # 组件独立发版与 pkg.go.dev 收录流程
-│   └── repository-migration.md
-├── computer-use/
-│   ├── go.mod            # module .../eino-plugins/computer-use
-│   ├── go.sum
-│   ├── computeruse.go    # 工具入口与包说明
-│   ├── types.go          # 配置、参数、结果及接口
-│   ├── host.go           # 会话、授权与快照
-│   ├── provider.go
-│   ├── uia.go
-│   ├── platform_*.go
-│   ├── example/
-│   ├── testdata/
-│   ├── assets/
-│   ├── docs/
-│   ├── README.md
-│   └── NOTICE
 └── sandboxfs/
     ├── go.mod            # module .../eino-plugins/sandboxfs
     ├── go.sum
@@ -70,7 +47,7 @@ eino-plugins/
 进入对应组件执行 Go 命令：
 
 ```sh
-cd computer-use
+cd sandboxfs
 GOWORK=off go test -race ./...
 GOWORK=off go vet ./...
 go run ./example/local
@@ -81,7 +58,7 @@ go run ./example/local
 需要同时开发多个组件时，可在仓库根目录生成本地工作区：
 
 ```sh
-go work init ./computer-use ./sandboxfs
+go work init ./sandboxfs
 ```
 
 `go.work` 与 `go.work.sum` 已被忽略。它们只服务本地联调，不参与组件分发；发版前使用 `GOWORK=off` 单独验证组件，避免本地工作区掩盖依赖问题。
@@ -90,7 +67,6 @@ go work init ./computer-use ./sandboxfs
 
 | 组件版本 | 仓库 Git 标签 | 使用者安装命令 |
 | --- | --- | --- |
-| computer-use `v0.1.0` | `computer-use/v0.1.0` | `go get github.com/sda1-hacker/eino-plugins/computer-use@v0.1.0` |
 | sandboxfs `v0.1.0` | `sandboxfs/v0.1.0` | `go get github.com/sda1-hacker/eino-plugins/sandboxfs@v0.1.0` |
 
 子目录 module 的标签需要带目录前缀，规则见 [Go Modules Reference](https://go.dev/ref/mod#vcs-version)。完整命令与 pkg.go.dev 收录方法见 [发布说明](docs/releasing.md)。
